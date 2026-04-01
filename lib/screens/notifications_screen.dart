@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../config/theme.dart';
 import '../controllers/notification_controller.dart';
 import '../widgets/notification_tile.dart';
 import '../widgets/loading_indicator.dart';
+import '../widgets/empty_state.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -25,27 +25,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        backgroundColor: AppTheme.surfaceColor,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text('Notifications'),
         actions: [
           Consumer<NotificationController>(
-            builder: (context, controller, child) {
+            builder: (context, controller, _) {
               if (controller.unreadCount > 0) {
                 return TextButton(
                   onPressed: controller.markAllAsRead,
-                  child: const Text(
-                    'Mark all read',
-                    style: TextStyle(
-                      color: AppTheme.primaryColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  child: const Text('Mark all read'),
                 );
               }
               return const SizedBox.shrink();
@@ -54,86 +46,43 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ],
       ),
       body: Consumer<NotificationController>(
-        builder: (context, controller, child) {
-          if (controller.isLoading) {
+        builder: (context, controller, _) {
+          if (controller.isLoading && controller.notifications.isEmpty) {
             return const LoadingIndicator();
           }
 
           if (controller.notifications.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.notifications_outlined,
-                    size: 80,
-                    color: AppTheme.textSecondaryColor.withOpacity(0.5),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No notifications yet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimaryColor,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    "You're all caught up!",
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.textSecondaryColor,
-                    ),
-                  ),
-                ],
-              ),
+            return const EmptyState(
+              icon: Icons.notifications_off_outlined,
+              title: 'No Notifications',
+              message: 'You\'re all caught up! Check back later.',
             );
           }
 
-          final unreadNotifications =
-              controller.notifications.where((n) => !n.isRead).toList();
-          final readNotifications =
-              controller.notifications.where((n) => n.isRead).toList();
-
-          return ListView(
-            children: [
-              if (unreadNotifications.isNotEmpty) ...[
-                _buildSectionHeader('New'),
-                ...unreadNotifications.map(
-                  (notification) => NotificationTile(
-                    notification: notification,
-                    onTap: () => controller.markAsRead(notification.id),
-                  ),
-                ),
-              ],
-              if (readNotifications.isNotEmpty) ...[
-                _buildSectionHeader('Earlier'),
-                ...readNotifications.map(
-                  (notification) => NotificationTile(
-                    notification: notification,
-                    onTap: () {},
-                  ),
-                ),
-              ],
-            ],
+          return RefreshIndicator(
+            onRefresh: () => controller.loadNotifications(),
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: controller.notifications.length,
+              separatorBuilder: (context, index) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final notification = controller.notifications[index];
+                return NotificationTile(
+                  notification: notification,
+                  onTap: () {
+                    controller.markAsRead(notification.id);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Opened: ${notification.title}'),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: AppTheme.backgroundColor,
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.textSecondaryColor,
-        ),
       ),
     );
   }

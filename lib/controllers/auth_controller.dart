@@ -1,129 +1,94 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
-import '../services/static_data_service.dart';
-
-enum AuthState { initial, loading, authenticated, unauthenticated, error }
+import '../services/auth_service.dart';
 
 class AuthController extends ChangeNotifier {
-  AuthState _state = AuthState.initial;
+  final AuthService _authService = AuthService();
+  
   UserModel? _currentUser;
+  bool _isLoading = false;
   String? _errorMessage;
 
-  AuthState get state => _state;
   UserModel? get currentUser => _currentUser;
+  bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
-  bool get isAuthenticated => _state == AuthState.authenticated;
+  bool get isLoggedIn => _currentUser != null;
 
-  Future<void> checkAuthStatus() async {
-    _state = AuthState.loading;
-    notifyListeners();
-
-    await Future.delayed(const Duration(seconds: 2));
-
-    _state = AuthState.unauthenticated;
-    notifyListeners();
-  }
-
-  Future<bool> login(String email, String password) async {
-    _state = AuthState.loading;
-    _errorMessage = null;
-    notifyListeners();
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (email.isEmpty || password.isEmpty) {
-      _errorMessage = 'Please fill in all fields';
-      _state = AuthState.error;
-      notifyListeners();
-      return false;
-    }
-
-    if (!_isValidEmail(email)) {
-      _errorMessage = 'Please enter a valid email address';
-      _state = AuthState.error;
-      notifyListeners();
-      return false;
-    }
-
-    if (password.length < 6) {
-      _errorMessage = 'Password must be at least 6 characters';
-      _state = AuthState.error;
-      notifyListeners();
-      return false;
-    }
-
-    _currentUser = StaticDataService.currentUser;
-    _state = AuthState.authenticated;
-    notifyListeners();
-    return true;
-  }
-
-  Future<bool> register(String name, String email, String password, String confirmPassword) async {
-    _state = AuthState.loading;
-    _errorMessage = null;
-    notifyListeners();
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (name.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
-      _errorMessage = 'Please fill in all fields';
-      _state = AuthState.error;
-      notifyListeners();
-      return false;
-    }
-
-    if (!_isValidEmail(email)) {
-      _errorMessage = 'Please enter a valid email address';
-      _state = AuthState.error;
-      notifyListeners();
-      return false;
-    }
-
-    if (password.length < 6) {
-      _errorMessage = 'Password must be at least 6 characters';
-      _state = AuthState.error;
-      notifyListeners();
-      return false;
-    }
-
-    if (password != confirmPassword) {
-      _errorMessage = 'Passwords do not match';
-      _state = AuthState.error;
-      notifyListeners();
-      return false;
-    }
-
-    _currentUser = UserModel(
-      id: 'new_user',
-      name: name,
-      email: email,
-      createdAt: DateTime.now(),
-    );
-    _state = AuthState.authenticated;
-    notifyListeners();
-    return true;
-  }
-
-  Future<void> logout() async {
-    _state = AuthState.loading;
-    notifyListeners();
-
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    _currentUser = null;
-    _state = AuthState.unauthenticated;
-    notifyListeners();
+  AuthController() {
+    _currentUser = _authService.currentUser;
   }
 
   void clearError() {
     _errorMessage = null;
-    if (_state == AuthState.error) {
-      _state = AuthState.unauthenticated;
-    }
     notifyListeners();
   }
 
-  bool _isValidEmail(String email) {
-    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  Future<bool> login(String email, String password) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _authService.login(email, password);
+      
+      if (result['success'] == true) {
+        _currentUser = result['user'] as UserModel;
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = result['error'] as String;
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'An unexpected error occurred. Please try again.';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> register(String name, String email, String password) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _authService.register(name, email, password);
+      
+      if (result['success'] == true) {
+        _currentUser = result['user'] as UserModel;
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = result['error'] as String;
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'An unexpected error occurred. Please try again.';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> logout() async {
+    _isLoading = true;
+    notifyListeners();
+
+    await _authService.logout();
+    _currentUser = null;
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  void updateProfile(UserModel updatedUser) {
+    _currentUser = updatedUser;
+    notifyListeners();
   }
 }

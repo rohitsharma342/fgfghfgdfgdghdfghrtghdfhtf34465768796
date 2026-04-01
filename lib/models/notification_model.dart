@@ -1,19 +1,12 @@
-enum NotificationType {
-  like,
-  comment,
-  follow,
-  mention,
-  share,
-}
+enum NotificationType { like, comment, follow, mention, share }
 
 class NotificationModel {
   final String id;
   final NotificationType type;
   final String title;
   final String message;
-  final String? actorName;
-  final String? actorImageUrl;
-  final String? targetId;
+  final String? userId;
+  final String? postId;
   final bool isRead;
   final DateTime createdAt;
 
@@ -22,21 +15,19 @@ class NotificationModel {
     required this.type,
     required this.title,
     required this.message,
-    this.actorName,
-    this.actorImageUrl,
-    this.targetId,
+    this.userId,
+    this.postId,
     this.isRead = false,
-    required this.createdAt,
-  });
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
 
   NotificationModel copyWith({
     String? id,
     NotificationType? type,
     String? title,
     String? message,
-    String? actorName,
-    String? actorImageUrl,
-    String? targetId,
+    String? userId,
+    String? postId,
     bool? isRead,
     DateTime? createdAt,
   }) {
@@ -45,9 +36,8 @@ class NotificationModel {
       type: type ?? this.type,
       title: title ?? this.title,
       message: message ?? this.message,
-      actorName: actorName ?? this.actorName,
-      actorImageUrl: actorImageUrl ?? this.actorImageUrl,
-      targetId: targetId ?? this.targetId,
+      userId: userId ?? this.userId,
+      postId: postId ?? this.postId,
       isRead: isRead ?? this.isRead,
       createdAt: createdAt ?? this.createdAt,
     );

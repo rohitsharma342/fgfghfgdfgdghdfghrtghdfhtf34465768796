@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../app/routes.dart';
 import '../config/theme.dart';
 import '../controllers/auth_controller.dart';
 import '../controllers/dashboard_controller.dart';
-import '../controllers/notification_controller.dart';
-import '../services/static_data_service.dart';
 import '../widgets/post_card.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/loading_indicator.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -21,241 +18,280 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _searchController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(_onTabChanged);
+    _tabController.addListener(_handleTabChange);
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<DashboardController>().loadFeed();
-      context.read<NotificationController>().loadNotifications();
+      context.read<DashboardController>().loadFeedPosts();
     });
   }
 
-  void _onTabChanged() {
-    if (_tabController.indexIsChanging) {
-      final tabs = [DashboardTab.feed, DashboardTab.trending, DashboardTab.notifications];
-      context.read<DashboardController>().setCurrentTab(tabs[_tabController.index]);
+  void _handleTabChange() {
+    if (!_tabController.indexIsChanging) {
+      final controller = context.read<DashboardController>();
+      switch (_tabController.index) {
+        case 0:
+          controller.setTab(DashboardTab.feed);
+          break;
+        case 1:
+          controller.setTab(DashboardTab.trending);
+          break;
+        case 2:
+          controller.setTab(DashboardTab.notifications);
+          break;
+      }
     }
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await context.read<AuthController>().logout();
+              if (mounted) {
+                Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+              }
+            },
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: _buildAppBar(),
+      appBar: AppBar(
+        title: const Text('Social Connect'),
+        actions: [
+          Consumer<DashboardController>(
+            builder: (context, controller, _) {
+              final unreadCount = controller.unreadNotificationCount;
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined),
+                    onPressed: () {
+                      Navigator.of(context).pushNamed(AppRoutes.notifications);
+                    },
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: AppTheme.errorColor,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          unreadCount > 9 ? '9+' : unreadCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            onPressed: () {
+              Navigator.of(context).pushNamed(
+                AppRoutes.profile,
+                arguments: {'isOwnProfile': true},
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _showLogoutDialog,
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Feed'),
+            Tab(text: 'Trending'),
+            Tab(text: 'Discover'),
+          ],
+        ),
+      ),
       body: Column(
         children: [
-          _buildSearchAndFilter(),
-          _buildTabBar(),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search posts or users...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                context
+                                    .read<DashboardController>()
+                                    .setSearchQuery('');
+                              },
+                            )
+                          : null,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                    onChanged: (value) {
+                      context
+                          .read<DashboardController>()
+                          .setSearchQuery(value);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Consumer<DashboardController>(
+                  builder: (context, controller, _) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppTheme.dividerColor),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: DropdownButton<String>(
+                        value: controller.selectedFilter,
+                        underline: const SizedBox(),
+                        icon: const Icon(Icons.filter_list),
+                        items: controller.filters.map((filter) {
+                          return DropdownMenuItem(
+                            value: filter,
+                            child: Text(filter),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            controller.setFilter(value);
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
                 _buildFeedTab(),
                 _buildTrendingTab(),
-                _buildNotificationsTab(),
+                _buildDiscoverTab(),
               ],
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push(AppRoutes.createPost),
+        onPressed: () {
+          Navigator.of(context).pushNamed(AppRoutes.postCreation);
+        },
         backgroundColor: AppTheme.primaryColor,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: AppTheme.surfaceColor,
-      elevation: 0,
-      title: const Text(
-        'Social Connect',
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: AppTheme.textPrimaryColor,
-        ),
-      ),
-      actions: [
-        Consumer<NotificationController>(
-          builder: (context, notifController, child) {
-            return Stack(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_outlined),
-                  onPressed: () => context.push(AppRoutes.notifications),
-                ),
-                if (notifController.unreadCount > 0)
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: AppTheme.errorColor,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        notifController.unreadCount > 9
-                            ? '9+'
-                            : notifController.unreadCount.toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-        GestureDetector(
-          onTap: () => context.push(AppRoutes.profile),
-          child: Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: AppTheme.dividerColor,
-              backgroundImage: CachedNetworkImageProvider(
-                StaticDataService.currentUser.profileImageUrl!,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSearchAndFilter() {
-    return Container(
-      color: AppTheme.surfaceColor,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppTheme.backgroundColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (value) {
-                  context.read<DashboardController>().setSearchQuery(value);
-                },
-                decoration: const InputDecoration(
-                  hintText: 'Search posts or users...',
-                  prefixIcon: Icon(Icons.search, color: AppTheme.textSecondaryColor),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Consumer<DashboardController>(
-            builder: (context, controller, child) {
-              return Container(
-                height: 44,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: AppTheme.backgroundColor,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: controller.selectedCategory,
-                    icon: const Icon(Icons.filter_list, size: 20),
-                    items: controller.categories.map((category) {
-                      return DropdownMenuItem(
-                        value: category,
-                        child: Text(
-                          category,
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        controller.setSelectedCategory(value);
-                      }
-                    },
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabBar() {
-    return Container(
-      color: AppTheme.surfaceColor,
-      child: TabBar(
-        controller: _tabController,
-        tabs: const [
-          Tab(text: 'Feed'),
-          Tab(text: 'Trending'),
-          Tab(text: 'Activity'),
-        ],
-        labelColor: AppTheme.primaryColor,
-        unselectedLabelColor: AppTheme.textSecondaryColor,
-        indicatorColor: AppTheme.primaryColor,
-        indicatorWeight: 3,
-      ),
-    );
-  }
-
   Widget _buildFeedTab() {
     return Consumer<DashboardController>(
-      builder: (context, controller, child) {
-        if (controller.isLoading) {
+      builder: (context, controller, _) {
+        if (controller.isLoading && controller.feedPosts.isEmpty) {
           return const LoadingIndicator();
         }
 
         if (controller.feedPosts.isEmpty) {
-          return _buildEmptyState(
+          return EmptyState(
             icon: Icons.article_outlined,
-            title: 'No posts yet',
-            message: 'Be the first to share something!',
+            title: 'No Posts Yet',
+            message: 'Be the first to share something with the community!',
+            actionLabel: 'Create Post',
+            onAction: () {
+              Navigator.of(context).pushNamed(AppRoutes.postCreation);
+            },
           );
         }
 
         return RefreshIndicator(
-          onRefresh: controller.refreshFeed,
-          color: AppTheme.primaryColor,
+          onRefresh: () => controller.loadFeedPosts(),
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.only(bottom: 80),
             itemCount: controller.feedPosts.length,
             itemBuilder: (context, index) {
               final post = controller.feedPosts[index];
               return PostCard(
                 post: post,
                 onLike: () => controller.toggleLike(post.id),
-                onComment: () {},
-                onShare: () {},
-                onBookmark: () => controller.toggleBookmark(post.id),
-                onProfileTap: () => context.push(
-                  '${AppRoutes.profile}?userId=${post.author.id}',
-                ),
+                onComment: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Comments feature coming soon!'),
+                    ),
+                  );
+                },
+                onShare: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Share feature coming soon!'),
+                    ),
+                  );
+                },
+                onProfileTap: () {
+                  Navigator.of(context).pushNamed(
+                    AppRoutes.profile,
+                    arguments: {
+                      'userId': post.userId,
+                      'isOwnProfile': false,
+                    },
+                  );
+                },
               );
             },
           ),
@@ -266,24 +302,23 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   Widget _buildTrendingTab() {
     return Consumer<DashboardController>(
-      builder: (context, controller, child) {
-        if (controller.isLoading) {
+      builder: (context, controller, _) {
+        if (controller.isLoading && controller.trendingPosts.isEmpty) {
           return const LoadingIndicator();
         }
 
         if (controller.trendingPosts.isEmpty) {
-          return _buildEmptyState(
+          return const EmptyState(
             icon: Icons.trending_up,
-            title: 'No trending posts',
-            message: 'Check back later for popular content!',
+            title: 'No Trending Posts',
+            message: 'Check back later for trending content!',
           );
         }
 
         return RefreshIndicator(
-          onRefresh: controller.refreshFeed,
-          color: AppTheme.primaryColor,
+          onRefresh: () => controller.loadTrendingPosts(),
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.only(bottom: 80),
             itemCount: controller.trendingPosts.length,
             itemBuilder: (context, index) {
               final post = controller.trendingPosts[index];
@@ -292,10 +327,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                 onLike: () => controller.toggleLike(post.id),
                 onComment: () {},
                 onShare: () {},
-                onBookmark: () => controller.toggleBookmark(post.id),
-                onProfileTap: () => context.push(
-                  '${AppRoutes.profile}?userId=${post.author.id}',
-                ),
+                onProfileTap: () {
+                  Navigator.of(context).pushNamed(
+                    AppRoutes.profile,
+                    arguments: {
+                      'userId': post.userId,
+                      'isOwnProfile': false,
+                    },
+                  );
+                },
               );
             },
           ),
@@ -304,105 +344,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildNotificationsTab() {
-    return Consumer<NotificationController>(
-      builder: (context, controller, child) {
-        if (controller.isLoading) {
-          return const LoadingIndicator();
-        }
-
-        if (controller.notifications.isEmpty) {
-          return _buildEmptyState(
-            icon: Icons.notifications_outlined,
-            title: 'No notifications',
-            message: 'You\'re all caught up!',
-          );
-        }
-
-        return ListView.builder(
-          itemCount: controller.notifications.length,
-          itemBuilder: (context, index) {
-            final notification = controller.notifications[index];
-            return ListTile(
-              leading: CircleAvatar(
-                backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
-                backgroundImage: notification.actorImageUrl != null
-                    ? CachedNetworkImageProvider(notification.actorImageUrl!)
-                    : null,
-                child: notification.actorImageUrl == null
-                    ? const Icon(Icons.person, color: AppTheme.primaryColor)
-                    : null,
-              ),
-              title: RichText(
-                text: TextSpan(
-                  style: const TextStyle(
-                    color: AppTheme.textPrimaryColor,
-                    fontSize: 14,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: notification.actorName ?? '',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    TextSpan(text: ' ${notification.message}'),
-                  ],
-                ),
-              ),
-              trailing: !notification.isRead
-                  ? Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppTheme.primaryColor,
-                        shape: BoxShape.circle,
-                      ),
-                    )
-                  : null,
-              onTap: () => controller.markAsRead(notification.id),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildEmptyState({
-    required IconData icon,
-    required String title,
-    required String message,
-  }) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 80,
-              color: AppTheme.textSecondaryColor.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimaryColor,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppTheme.textSecondaryColor,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+  Widget _buildDiscoverTab() {
+    return const EmptyState(
+      icon: Icons.explore_outlined,
+      title: 'Discover New Connections',
+      message: 'Explore and find interesting people to follow!',
     );
   }
 }

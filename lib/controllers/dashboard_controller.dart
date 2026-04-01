@@ -1,106 +1,133 @@
 import 'package:flutter/material.dart';
 import '../models/post_model.dart';
-import '../services/static_data_service.dart';
+import '../services/data_service.dart';
 
 enum DashboardTab { feed, trending, notifications }
 
 class DashboardController extends ChangeNotifier {
+  final DataService _dataService = DataService();
+  
   DashboardTab _currentTab = DashboardTab.feed;
   List<PostModel> _feedPosts = [];
   List<PostModel> _trendingPosts = [];
-  List<PostModel> _filteredPosts = [];
-  String _searchQuery = '';
-  String _selectedCategory = 'All';
   bool _isLoading = false;
   String? _errorMessage;
+  String _searchQuery = '';
+  String _selectedFilter = 'All';
+
+  final List<String> filters = [
+    'All',
+    'Travel',
+    'Business',
+    'Food',
+    'Fitness',
+    'Books',
+    'Photography',
+    'Technology',
+    'News',
+    'Sports',
+  ];
 
   DashboardTab get currentTab => _currentTab;
-  List<PostModel> get feedPosts => _filteredPosts.isEmpty && _searchQuery.isEmpty && _selectedCategory == 'All' 
-      ? _feedPosts 
-      : _filteredPosts;
+  List<PostModel> get feedPosts => _feedPosts;
   List<PostModel> get trendingPosts => _trendingPosts;
-  String get searchQuery => _searchQuery;
-  String get selectedCategory => _selectedCategory;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
-  List<String> get categories => StaticDataService.categories;
+  String get searchQuery => _searchQuery;
+  String get selectedFilter => _selectedFilter;
+  int get unreadNotificationCount => _dataService.unreadNotificationCount;
 
-  Future<void> loadFeed() async {
+  Future<void> loadFeedPosts() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    _feedPosts = List.from(StaticDataService.posts);
-    _trendingPosts = List.from(StaticDataService.trendingPosts);
-    _applyFilters();
-    _isLoading = false;
-    notifyListeners();
+    try {
+      _feedPosts = await _dataService.getFeedPosts(
+        filter: _selectedFilter,
+        searchQuery: _searchQuery,
+      );
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Failed to load posts. Please try again.';
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  void setCurrentTab(DashboardTab tab) {
+  Future<void> loadTrendingPosts() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      _trendingPosts = await _dataService.getTrendingPosts();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Failed to load trending posts. Please try again.';
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void setTab(DashboardTab tab) {
     _currentTab = tab;
     notifyListeners();
+    
+    if (tab == DashboardTab.feed && _feedPosts.isEmpty) {
+      loadFeedPosts();
+    } else if (tab == DashboardTab.trending && _trendingPosts.isEmpty) {
+      loadTrendingPosts();
+    }
   }
 
   void setSearchQuery(String query) {
     _searchQuery = query;
-    _applyFilters();
-    notifyListeners();
+    loadFeedPosts();
   }
 
-  void setSelectedCategory(String category) {
-    _selectedCategory = category;
-    _applyFilters();
-    notifyListeners();
-  }
-
-  void _applyFilters() {
-    _filteredPosts = _feedPosts.where((post) {
-      bool matchesSearch = _searchQuery.isEmpty ||
-          post.content.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          post.author.name.toLowerCase().contains(_searchQuery.toLowerCase());
-      
-      bool matchesCategory = _selectedCategory == 'All' ||
-          post.category == _selectedCategory;
-      
-      return matchesSearch && matchesCategory;
-    }).toList();
+  void setFilter(String filter) {
+    _selectedFilter = filter;
+    loadFeedPosts();
   }
 
   void toggleLike(String postId) {
-    final index = _feedPosts.indexWhere((post) => post.id == postId);
-    if (index != -1) {
-      final post = _feedPosts[index];
-      _feedPosts[index] = post.copyWith(
+    _dataService.toggleLike(postId);
+    
+    final feedIndex = _feedPosts.indexWhere((p) => p.id == postId);
+    if (feedIndex != -1) {
+      final post = _feedPosts[feedIndex];
+      _feedPosts[feedIndex] = post.copyWith(
         isLiked: !post.isLiked,
         likesCount: post.isLiked ? post.likesCount - 1 : post.likesCount + 1,
       );
-      _applyFilters();
-      notifyListeners();
     }
-  }
-
-  void toggleBookmark(String postId) {
-    final index = _feedPosts.indexWhere((post) => post.id == postId);
-    if (index != -1) {
-      final post = _feedPosts[index];
-      _feedPosts[index] = post.copyWith(
-        isBookmarked: !post.isBookmarked,
+    
+    final trendingIndex = _trendingPosts.indexWhere((p) => p.id == postId);
+    if (trendingIndex != -1) {
+      final post = _trendingPosts[trendingIndex];
+      _trendingPosts[trendingIndex] = post.copyWith(
+        isLiked: !post.isLiked,
+        likesCount: post.isLiked ? post.likesCount - 1 : post.likesCount + 1,
       );
-      _applyFilters();
-      notifyListeners();
     }
-  }
-
-  void addPost(PostModel post) {
-    _feedPosts.insert(0, post);
-    _applyFilters();
+    
     notifyListeners();
   }
 
-  Future<void> refreshFeed() async {
-    await loadFeed();
+  void addNewPost(PostModel post) {
+    _feedPosts.insert(0, post);
+    _dataService.addPost(post);
+    notifyListeners();
+  }
+
+  void refresh() {
+    if (_currentTab == DashboardTab.feed) {
+      loadFeedPosts();
+    } else if (_currentTab == DashboardTab.trending) {
+      loadTrendingPosts();
+    }
   }
 }

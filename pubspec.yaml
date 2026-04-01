@@ -1,4 +1,4 @@
-name: social_connect_app
+name: social_connect
 description: A social platform designed to connect people and facilitate interaction.
 publish_to: 'none'
 version: 1.0.0+1
@@ -10,12 +10,18 @@ dependencies:
   flutter:
     sdk: flutter
   provider: ^6.1.1
-  go_router: ^13.0.0
   cached_network_image: ^3.3.1
-  flutter_staggered_animations: ^1.1.1
-  shimmer: ^3.0.0
-  intl: ^0.19.0
-  shared_preferences: ^2.2.2
+  intl: ^0.18.1
+  uuid: ^4.2.1
+  flutter_cache_manager: ^3.3.1
+  http: ^1.1.0
+  sqflite: ^2.3.0
+  path_provider: ^2.1.1
+  path: ^1.8.3
+  sqflite_common_ffi: ^2.3.0
+  sqflite_common_ffi_web: ^0.4.0
+  path_provider_web: ^2.1.1
+  cached_network_image_web: ^1.1.0
 
 dev_dependencies:
   flutter_test:

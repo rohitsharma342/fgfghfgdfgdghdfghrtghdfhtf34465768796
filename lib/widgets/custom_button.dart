@@ -6,31 +6,44 @@ class CustomButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool isLoading;
   final bool isOutlined;
+  final bool isSmall;
   final IconData? icon;
-  final double? width;
-  final double height;
-  final Color? backgroundColor;
-  final Color? textColor;
 
   const CustomButton({
     super.key,
     required this.text,
-    this.onPressed,
+    required this.onPressed,
     this.isLoading = false,
     this.isOutlined = false,
+    this.isSmall = false,
     this.icon,
-    this.width,
-    this.height = 52,
-    this.backgroundColor,
-    this.textColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final buttonChild = isLoading
+    final buttonStyle = isOutlined
+        ? OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.primaryColor,
+            side: const BorderSide(color: AppTheme.primaryColor, width: 2),
+            padding: EdgeInsets.symmetric(
+              horizontal: isSmall ? 16 : 24,
+              vertical: isSmall ? 8 : 16,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          )
+        : ElevatedButton.styleFrom(
+            padding: EdgeInsets.symmetric(
+              horizontal: isSmall ? 16 : 24,
+              vertical: isSmall ? 8 : 16,
+            ),
+          );
+
+    final child = isLoading
         ? SizedBox(
-            height: 20,
-            width: 20,
+            height: isSmall ? 16 : 20,
+            width: isSmall ? 16 : 20,
             child: CircularProgressIndicator(
               strokeWidth: 2,
               valueColor: AlwaysStoppedAnimation<Color>(
@@ -40,45 +53,33 @@ class CustomButton extends StatelessWidget {
           )
         : Row(
             mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 20),
+                Icon(icon, size: isSmall ? 16 : 20),
                 const SizedBox(width: 8),
               ],
-              Text(text),
+              Text(
+                text,
+                style: TextStyle(
+                  fontSize: isSmall ? 14 : 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           );
 
     if (isOutlined) {
-      return SizedBox(
-        width: width,
-        height: height,
-        child: OutlinedButton(
-          onPressed: isLoading ? null : onPressed,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: textColor ?? AppTheme.primaryColor,
-            side: BorderSide(
-              color: backgroundColor ?? AppTheme.primaryColor,
-              width: 1.5,
-            ),
-          ),
-          child: buttonChild,
-        ),
+      return OutlinedButton(
+        onPressed: isLoading ? null : onPressed,
+        style: buttonStyle,
+        child: child,
       );
     }
 
-    return SizedBox(
-      width: width,
-      height: height,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: backgroundColor ?? AppTheme.primaryColor,
-          foregroundColor: textColor ?? Colors.white,
-        ),
-        child: buttonChild,
-      ),
+    return ElevatedButton(
+      onPressed: isLoading ? null : onPressed,
+      style: buttonStyle,
+      child: child,
     );
   }
 }

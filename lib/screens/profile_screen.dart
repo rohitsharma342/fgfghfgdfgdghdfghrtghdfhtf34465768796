@@ -1,332 +1,278 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import '../app/routes.dart';
 import '../config/theme.dart';
-import '../controllers/auth_controller.dart';
 import '../controllers/profile_controller.dart';
+import '../controllers/auth_controller.dart';
 import '../widgets/post_card.dart';
-import '../widgets/custom_button.dart';
 import '../widgets/loading_indicator.dart';
+import '../widgets/empty_state.dart';
+import '../widgets/custom_button.dart';
+import '../widgets/custom_text_field.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
+  final bool isOwnProfile;
 
-  const ProfileScreen({super.key, this.userId});
+  const ProfileScreen({
+    super.key,
+    this.userId,
+    this.isOwnProfile = true,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _bioController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProfileController>().loadProfile(widget.userId);
+      context.read<ProfileController>().loadProfile(
+            widget.userId,
+            widget.isOwnProfile,
+          );
     });
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _bioController.dispose();
+    super.dispose();
+  }
+
+  void _startEditing() {
+    final controller = context.read<ProfileController>();
+    _nameController.text = controller.user?.name ?? '';
+    _bioController.text = controller.user?.bio ?? '';
+    controller.setEditing(true);
+  }
+
+  void _saveProfile() {
+    context.read<ProfileController>().updateProfile(
+          _nameController.text.trim(),
+          _bioController.text.trim(),
+        );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text('Profile'),
+        actions: [
+          if (widget.isOwnProfile)
+            Consumer<ProfileController>(
+              builder: (context, controller, _) {
+                if (controller.isEditing) {
+                  return Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => controller.setEditing(false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: _saveProfile,
+                        child: const Text('Save'),
+                      ),
+                    ],
+                  );
+                }
+                return IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: _startEditing,
+                );
+              },
+            ),
+        ],
+      ),
       body: Consumer<ProfileController>(
-        builder: (context, controller, child) {
-          if (controller.isLoading) {
+        builder: (context, controller, _) {
+          if (controller.isLoading && controller.user == null) {
             return const LoadingIndicator();
           }
 
           if (controller.user == null) {
-            return const Center(
-              child: Text('User not found'),
+            return const EmptyState(
+              icon: Icons.person_off_outlined,
+              title: 'Profile Not Found',
+              message: 'Unable to load profile information.',
             );
           }
 
-          return CustomScrollView(
-            slivers: [
-              _buildSliverAppBar(controller),
-              SliverToBoxAdapter(
-                child: _buildProfileHeader(controller),
-              ),
-              SliverToBoxAdapter(
-                child: _buildStats(controller),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'Posts',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimaryColor,
+          final user = controller.user!;
+
+          return RefreshIndicator(
+            onRefresh: () => controller.loadProfile(
+              widget.userId,
+              widget.isOwnProfile,
+            ),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-              ),
-              controller.userPosts.isEmpty
-                  ? SliverFillRemaining(
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.article_outlined,
-                              size: 64,
-                              color: AppTheme.textSecondaryColor.withOpacity(0.5),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
+                          backgroundImage: user.profileImageUrl != null
+                              ? NetworkImage(user.profileImageUrl!)
+                              : null,
+                          child: user.profileImageUrl == null
+                              ? Text(
+                                  user.name.isNotEmpty
+                                      ? user.name[0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        if (controller.isEditing) ...[
+                          CustomTextField(
+                            controller: _nameController,
+                            label: 'Name',
+                            hint: 'Enter your name',
+                          ),
+                          const SizedBox(height: 12),
+                          CustomTextField(
+                            controller: _bioController,
+                            label: 'Bio',
+                            hint: 'Tell us about yourself',
+                            maxLines: 3,
+                          ),
+                        ] else ...[
+                          Text(
+                            user.name,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimary,
                             ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'No posts yet',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: AppTheme.textSecondaryColor,
+                          ),
+                          const SizedBox(height: 8),
+                          if (user.bio != null && user.bio!.isNotEmpty)
+                            Text(
+                              user.bio!,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: AppTheme.textSecondary,
                               ),
+                              textAlign: TextAlign.center,
+                            ),
+                        ],
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _StatItem(
+                              label: 'Posts',
+                              value: user.postsCount.toString(),
+                            ),
+                            _StatItem(
+                              label: 'Followers',
+                              value: _formatCount(user.followersCount),
+                            ),
+                            _StatItem(
+                              label: 'Following',
+                              value: _formatCount(user.followingCount),
                             ),
                           ],
                         ),
+                        if (!widget.isOwnProfile) ...[
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: 200,
+                            child: CustomButton(
+                              text: user.isFollowing ? 'Following' : 'Follow',
+                              onPressed: controller.toggleFollow,
+                              isOutlined: user.isFollowing,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.grid_view_rounded,
+                          color: AppTheme.primaryColor,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Posts (${controller.userPosts.length})',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (controller.userPosts.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: EmptyState(
+                        icon: Icons.article_outlined,
+                        title: 'No Posts Yet',
+                        message: 'Posts will appear here.',
                       ),
                     )
-                  : SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final post = controller.userPosts[index];
-                          return PostCard(
-                            post: post,
-                            onLike: () {},
-                            onComment: () {},
-                            onShare: () {},
-                            onBookmark: () {},
-                          );
-                        },
-                        childCount: controller.userPosts.length,
-                      ),
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: controller.userPosts.length,
+                      itemBuilder: (context, index) {
+                        final post = controller.userPosts[index];
+                        return PostCard(
+                          post: post,
+                          onLike: () => controller.toggleLike(post.id),
+                          onComment: () {},
+                          onShare: () {},
+                          onProfileTap: () {},
+                        );
+                      },
                     ),
-            ],
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
           );
         },
       ),
-    );
-  }
-
-  Widget _buildSliverAppBar(ProfileController controller) {
-    return SliverAppBar(
-      expandedHeight: 200,
-      pinned: true,
-      backgroundColor: AppTheme.primaryColor,
-      leading: IconButton(
-        icon: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.black26,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.arrow_back_ios_new, size: 18, color: Colors.white),
-        ),
-        onPressed: () => context.pop(),
-      ),
-      actions: [
-        if (controller.isOwnProfile)
-          PopupMenuButton<String>(
-            icon: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.black26,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.more_vert, color: Colors.white),
-            ),
-            onSelected: (value) async {
-              if (value == 'logout') {
-                await context.read<AuthController>().logout();
-                if (context.mounted) {
-                  context.go(AppRoutes.login);
-                }
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'settings',
-                child: Row(
-                  children: [
-                    Icon(Icons.settings, size: 20),
-                    SizedBox(width: 12),
-                    Text('Settings'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout, size: 20, color: AppTheme.errorColor),
-                    SizedBox(width: 12),
-                    Text('Logout', style: TextStyle(color: AppTheme.errorColor)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-      ],
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppTheme.primaryColor,
-                AppTheme.primaryColor.withOpacity(0.8),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileHeader(ProfileController controller) {
-    final user = controller.user!;
-    return Container(
-      color: AppTheme.surfaceColor,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          Transform.translate(
-            offset: const Offset(0, -60),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: CircleAvatar(
-                    radius: 50,
-                    backgroundColor: AppTheme.dividerColor,
-                    backgroundImage: user.profileImageUrl != null
-                        ? CachedNetworkImageProvider(user.profileImageUrl!)
-                        : null,
-                    child: user.profileImageUrl == null
-                        ? Text(
-                            user.name[0].toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryColor,
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  user.name,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimaryColor,
-                  ),
-                ),
-                if (user.bio != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    user.bio!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.textSecondaryColor,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                if (controller.isOwnProfile)
-                  CustomButton(
-                    text: 'Edit Profile',
-                    onPressed: () {},
-                    isOutlined: true,
-                    icon: Icons.edit,
-                    width: 160,
-                    height: 44,
-                  )
-                else
-                  CustomButton(
-                    text: user.isFollowing ? 'Following' : 'Follow',
-                    onPressed: controller.toggleFollow,
-                    isOutlined: user.isFollowing,
-                    icon: user.isFollowing ? Icons.check : Icons.person_add,
-                    width: 140,
-                    height: 44,
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStats(ProfileController controller) {
-    final user = controller.user!;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildStatItem('Posts', user.postsCount),
-          Container(
-            width: 1,
-            height: 40,
-            color: AppTheme.dividerColor,
-          ),
-          _buildStatItem('Followers', user.followersCount),
-          Container(
-            width: 1,
-            height: 40,
-            color: AppTheme.dividerColor,
-          ),
-          _buildStatItem('Following', user.followingCount),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(String label, int count) {
-    return Column(
-      children: [
-        Text(
-          _formatCount(count),
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimaryColor,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            color: AppTheme.textSecondaryColor,
-          ),
-        ),
-      ],
     );
   }
 
@@ -337,5 +283,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return '${(count / 1000).toStringAsFixed(1)}K';
     }
     return count.toString();
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StatItem({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+      ],
+    );
   }
 }

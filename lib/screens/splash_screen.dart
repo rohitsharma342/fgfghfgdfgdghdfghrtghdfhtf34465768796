@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../app/routes.dart';
 import '../config/theme.dart';
 import '../controllers/auth_controller.dart';
-import '../utils/constants.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -42,23 +40,18 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     _animationController.forward();
-    _checkAuthAndNavigate();
+    _navigateToNextScreen();
   }
 
-  Future<void> _checkAuthAndNavigate() async {
-    await Future.delayed(AppConstants.splashDuration);
+  Future<void> _navigateToNextScreen() async {
+    await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
 
     final authController = context.read<AuthController>();
-    await authController.checkAuthStatus();
+    final nextRoute =
+        authController.isLoggedIn ? AppRoutes.dashboard : AppRoutes.login;
 
-    if (!mounted) return;
-
-    if (authController.isAuthenticated) {
-      context.go(AppRoutes.dashboard);
-    } else {
-      context.go(AppRoutes.login);
-    }
+    Navigator.of(context).pushReplacementNamed(nextRoute);
   }
 
   @override
@@ -70,7 +63,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.surfaceColor,
+      backgroundColor: AppTheme.primaryColor,
       body: Center(
         child: AnimatedBuilder(
           animation: _animationController,
@@ -86,50 +79,59 @@ class _SplashScreenState extends State<SplashScreen>
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryColor,
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(
-                            color: AppTheme.primaryColor.withOpacity(0.3),
-                            blurRadius: 30,
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 20,
                             offset: const Offset(0, 10),
                           ),
                         ],
                       ),
                       child: const Icon(
-                        Icons.connect_without_contact,
+                        Icons.people_alt_rounded,
                         size: 60,
-                        color: Colors.white,
+                        color: AppTheme.primaryColor,
                       ),
                     ),
                     const SizedBox(height: 32),
                     const Text(
-                      AppConstants.appName,
+                      'Social Connect',
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimaryColor,
-                        letterSpacing: -0.5,
+                        color: Colors.white,
+                        letterSpacing: 1.2,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      AppConstants.appTagline,
+                      'Connect. Share. Engage.',
                       style: TextStyle(
-                        fontSize: 14,
-                        color: AppTheme.textSecondaryColor.withOpacity(0.8),
-                        letterSpacing: 1,
+                        fontSize: 16,
+                        color: Colors.white.withOpacity(0.9),
+                        letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 60),
                     SizedBox(
-                      width: 32,
-                      height: 32,
+                      width: 40,
+                      height: 40,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          AppTheme.primaryColor.withOpacity(0.7),
+                          Colors.white.withOpacity(0.9),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 100),
+                    Text(
+                      'Made With BrainBox',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withOpacity(0.7),
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ],

@@ -20,8 +20,8 @@ class UserModel {
     this.followingCount = 0,
     this.postsCount = 0,
     this.isFollowing = false,
-    required this.createdAt,
-  });
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
 
   UserModel copyWith({
     String? id,
@@ -46,38 +46,6 @@ class UserModel {
       postsCount: postsCount ?? this.postsCount,
       isFollowing: isFollowing ?? this.isFollowing,
       createdAt: createdAt ?? this.createdAt,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'email': email,
-      'bio': bio,
-      'profileImageUrl': profileImageUrl,
-      'followersCount': followersCount,
-      'followingCount': followingCount,
-      'postsCount': postsCount,
-      'isFollowing': isFollowing,
-      'createdAt': createdAt.toIso8601String(),
-    };
-  }
-
-  factory UserModel.fromJson(Map<String, dynamic> json) {
-    return UserModel(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      email: json['email'] ?? '',
-      bio: json['bio'],
-      profileImageUrl: json['profileImageUrl'],
-      followersCount: json['followersCount'] ?? 0,
-      followingCount: json['followingCount'] ?? 0,
-      postsCount: json['postsCount'] ?? 0,
-      isFollowing: json['isFollowing'] ?? false,
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'])
-          : DateTime.now(),
     );
   }
 }
